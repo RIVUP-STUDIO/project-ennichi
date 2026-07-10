@@ -1,65 +1,132 @@
 :root{
-  --ink:#2d241d;--paper:#fff8e8;--sand:#e8c783;--red:#d94a3a;
-  --green:#2fa36b;--warn:#efe1bd;--gold:#efb936
+  --night: #10121c;
+  --night2: #191c2b;
+  --paper: #fbf3df;
+  --paper-shadow: #d8caa0;
+  --lantern: #ff8a3d;
+  --lantern-dim: #ffb066;
+  --safe: #3fe08a;
+  --warn: #fff6d8;
+  --danger: #ff3b3b;
+  --flagred: #bc002d;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 html,body{
-  margin:0;min-height:100%;overscroll-behavior:none;
-  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;
-  color:var(--ink);
-  background:
-    radial-gradient(circle at 18% 8%,rgba(255,255,255,.78),transparent 28%),
-    linear-gradient(180deg,#f7dfa5,#edc46f)
+  margin:0; padding:0; height:100%; overflow:hidden;
+  background: radial-gradient(ellipse at 50% 20%, var(--night2), var(--night) 70%);
+  font-family:'Zen Kaku Gothic New', sans-serif;
+  color: var(--paper);
+  touch-action: none;
+  user-select: none;
 }
-body{padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-button{font:inherit}
-.app{width:min(100%,520px);margin:auto;padding:14px 0 24px}
-.hero{text-align:center;margin-bottom:10px}
-.eyebrow{font-size:10px;letter-spacing:.22em;font-weight:900;color:#17334b;margin:0 0 4px}
-h1{font-size:clamp(42px,12vw,66px);line-height:.95;letter-spacing:.08em;margin:0}
-.tagline{font-weight:800;color:#6e4c24;margin:9px 0 0}
-.panel{
-  background:rgba(255,250,240,.92);border:2px solid rgba(92,61,27,.2);
-  border-radius:26px;padding:14px;box-shadow:0 18px 42px rgba(89,53,15,.18)
+#stage{
+  position:relative;
+  width:100vw; height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
 }
-.top{display:flex;justify-content:space-between;align-items:center}
-.top span{display:block;font-size:10px;letter-spacing:.18em;color:#8a6b46;font-weight:900}
-.top strong{display:block;margin-top:2px}
-.round{width:44px;height:44px;border:0;border-radius:14px;background:white;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-.progress{height:8px;background:#eadcc6;border-radius:999px;overflow:hidden;margin:12px 0}
-#progressBar{height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--green));transition:width .08s linear}
-.canvasWrap{
-  position:relative;aspect-ratio:640/720;border-radius:22px;overflow:hidden;
-  border:2px solid rgba(83,54,23,.18);
-  background:
-    radial-gradient(circle at center,rgba(255,255,255,.48),transparent 52%),
-    repeating-linear-gradient(45deg,rgba(102,70,34,.035) 0 2px,transparent 2px 8px),
-    var(--sand);
-  touch-action:none
+/* faint lantern glow ambience */
+.glow{
+  position:absolute; border-radius:50%;
+  filter: blur(60px); opacity:0.25; pointer-events:none;
 }
-canvas{width:100%;height:100%;display:block;touch-action:none}
-.guide{
-  position:absolute;left:18px;right:18px;bottom:18px;padding:12px 14px;border-radius:16px;
-  background:rgba(31,40,48,.86);color:white;text-align:center;display:grid;gap:3px;
-  pointer-events:none;transition:.2s
+.glow1{ width:260px; height:260px; background:var(--lantern); top:-60px; left:-60px; }
+.glow2{ width:220px; height:220px; background:var(--flagred); bottom:-60px; right:-40px; }
+
+#hud{
+  position:absolute; top:0; left:0; right:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: max(14px, env(safe-area-inset-top)) 18px 0 18px;
+  z-index:5;
 }
-.guide.hidden{opacity:0;transform:translateY(8px)}
-.guide strong{font-size:15px}.guide span{font-size:11px;opacity:.82}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-.stats div{background:white;border-radius:14px;padding:8px 6px;text-align:center}
-.stats span{display:block;font-size:10px;color:#8d755c}.stats strong{font-size:16px}
-.legend{display:flex;justify-content:center;gap:13px;flex-wrap:wrap;font-size:10px;color:#6d5946;margin:10px 0 0}
-.legend span{display:flex;align-items:center;gap:5px}
-.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
-.g{background:var(--green)}.w{background:var(--warn);border:1px solid #c7b68d}.r{background:var(--red)}
-.actions{display:grid;grid-template-columns:1fr 1.45fr;gap:10px;margin-top:10px}
-.actions button,.result button{border:0;min-height:48px;border-radius:15px;font-weight:900}
-.primary{background:var(--red);color:white;box-shadow:0 5px 0 #a83227}
-.primary:disabled{background:#c9bba7;box-shadow:0 5px 0 #a89a87;color:#f2eadf}
-.secondary{background:white;color:var(--ink);border:1px solid #e5d6c3!important}
-footer{text-align:center;font-size:10px;color:rgba(54,39,21,.55);margin-top:12px}
-dialog{border:0;padding:0;background:transparent;width:min(calc(100% - 40px),390px)}
-dialog::backdrop{background:rgba(18,23,29,.72);backdrop-filter:blur(4px)}
-.result{background:#fffaf0;border-radius:26px;padding:28px 22px 22px;text-align:center}
-#resultIcon{font-size:58px}#resultKicker{color:var(--red);font-weight:1000;letter-spacing:.16em}
-.result h2{font-size:30px;margin:0 0 8px}.result button{width:100%}
+#progressWrap{
+  flex:1; height:10px; background:rgba(255,255,255,0.08);
+  border-radius:6px; margin: 0 14px; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.12);
+}
+#progressBar{
+  height:100%; width:0%;
+  background: linear-gradient(90deg, var(--lantern), var(--safe));
+  transition: width 0.08s linear;
+}
+#timer{
+  font-variant-numeric: tabular-nums;
+  font-weight:700; font-size:15px; letter-spacing:0.5px;
+  min-width:64px; text-align:right; opacity:0.85;
+}
+#needleName{
+  font-size:13px; opacity:0.6; min-width:64px;
+}
+
+canvas{ touch-action:none; display:block; }
+
+.overlay{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:22px; text-align:center; z-index:10;
+  background: radial-gradient(ellipse at 50% 30%, rgba(25,28,43,0.4), rgba(16,18,28,0.92) 75%);
+  padding: 0 24px;
+}
+.hidden{ display:none !important; }
+
+h1.title{
+  font-family:'Yuji Syuku', serif;
+  font-size: clamp(34px, 10vw, 56px);
+  letter-spacing: 4px;
+  color: var(--paper);
+  text-shadow: 0 0 18px rgba(255,138,61,0.55), 0 0 2px rgba(0,0,0,0.6);
+  margin:0;
+  line-height:1.3;
+}
+h1.title .sub{
+  display:block; font-family:'Zen Kaku Gothic New',sans-serif;
+  font-size: 13px; letter-spacing: 6px; opacity:0.55; margin-top:8px; font-weight:700;
+}
+.stageLabel{
+  font-size:13px; letter-spacing:3px; opacity:0.6; font-weight:700;
+}
+button.cta{
+  font-family:'Zen Kaku Gothic New', sans-serif;
+  font-weight:900; font-size:16px; letter-spacing:3px;
+  padding: 15px 34px; border-radius: 999px; border:none;
+  background: linear-gradient(180deg, var(--lantern), #d95d16);
+  color: #1a0e04;
+  box-shadow: 0 6px 0 #7a3706, 0 10px 22px rgba(255,138,61,0.35);
+  cursor:pointer;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+button.cta:active{ transform: translateY(4px); box-shadow: 0 2px 0 #7a3706; }
+@keyframes pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.045);} }
+
+.resultTime{ font-size:14px; opacity:0.7; letter-spacing:1px; }
+.resultTime b{ color: var(--lantern-dim); font-size:20px; }
+
+.legend{
+  position:absolute; bottom: max(16px, env(safe-area-inset-bottom));
+  display:flex; gap:16px; font-size:11px; opacity:0.55; letter-spacing:1px;
+  z-index:5;
+}
+.legend span{ display:flex; align-items:center; gap:6px; }
+.dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+.stageList{ display:flex; flex-direction:column; gap:12px; width:min(78vw, 300px); }
+button.stageBtn{
+  font-family:'Zen Kaku Gothic New', sans-serif;
+  font-weight:700; font-size:15px; letter-spacing:2px;
+  padding: 13px 18px; border-radius: 16px; border:1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: var(--paper);
+  display:flex; align-items:center; gap:12px;
+  cursor:pointer;
+}
+button.stageBtn:active{ background: rgba(255,255,255,0.14); }
+button.stageBtn .num{
+  width:26px; height:26px; border-radius:50%; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:900;
+  background: var(--lantern); color:#1a0e04;
+}
+.linkBtn{
+  background:none; border:none; color: var(--paper); opacity:0.5;
+  font-family:'Zen Kaku Gothic New', sans-serif; font-size:12px; letter-spacing:2px;
+  text-decoration: underline; cursor:pointer; padding:6px;
+}

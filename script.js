@@ -1,360 +1,364 @@
-(() => {
-  "use strict";
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const hud = document.getElementById('hud');
+  const legend = document.getElementById('legend');
+  const progressBar = document.getElementById('progressBar');
+  const timerEl = document.getElementById('timer');
+  const titleScreen = document.getElementById('titleScreen');
+  const gameoverScreen = document.getElementById('gameoverScreen');
+  const clearScreen = document.getElementById('clearScreen');
+  const stageList = document.getElementById('stageList');
+  const retryBtn = document.getElementById('retryBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const backBtnOver = document.getElementById('backBtnOver');
+  const backBtnClear = document.getElementById('backBtnClear');
+  const clearTimeEl = document.getElementById('clearTime');
+  const needleName = document.getElementById('needleName');
 
-  const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d");
-  const stageName = document.getElementById("stageName");
-  const progressBar = document.getElementById("progressBar");
-  const progressText = document.getElementById("progressText");
-  const timerEl = document.getElementById("timer");
-  const stateText = document.getElementById("stateText");
-  const guide = document.getElementById("guide");
-  const resetBtn = document.getElementById("resetBtn");
-  const nextBtn = document.getElementById("nextBtn");
-  const soundBtn = document.getElementById("soundBtn");
-  const resultDialog = document.getElementById("resultDialog");
-  const resultIcon = document.getElementById("resultIcon");
-  const resultTitle = document.getElementById("resultTitle");
-  const resultBody = document.getElementById("resultBody");
-  const resultNext = document.getElementById("resultNext");
+  let W, H, cx, cy, R, safeBand, needleOffset;
+  const N_BUCKETS = 360;
 
-  const W = canvas.width, H = canvas.height;
-  const C = {x:W/2,y:330};
-  const N = 720;
-  const NEEDLE_LEN = 96;
-  const GRAB_R = 38;
+  // ---- stage shapes ----
+  // Every shape is expressed as targetRadius(theta, R): given a canvas-space
+  // angle (atan2(dy,dx), y-down) and the base radius R, return how far the
+  // guide line sits from the center in that direction. A plain circle is
+  // just a constant; heart/star vary by angle.
+  function heartRadius(theta, Rb){
+    const phi = -theta; // convert canvas angle to standard math (y-up) angle
+    const s = Math.sin(phi), c = Math.cos(phi);
+    const r = 2 - 2*s + s*Math.sqrt(Math.abs(c))/(s + 1.4);
+    return (r / 4) * Rb * 1.18;
+  }
+  function starRadius(theta, Rb){
+    const points = 5;
+    const step = Math.PI / points;
+    let t = theta + Math.PI/2; // rotate so one point faces up
+    t = ((t % (2*step)) + (2*step)) % (2*step);
+    if(t > step) t = (2*step) - t;
+    const Router = Rb * 1.12, Rinner = Rb * 0.46;
+    const xA = Router, yA = 0;
+    const xB = Rinner * Math.cos(step), yB = Rinner * Math.sin(step);
+    const C = -xA * (yB - yA);
+    const denom = Math.sin(t) * (xB - xA) - Math.cos(t) * (yB - yA);
+    return C / denom;
+  }
 
-  let stageIndex = 0;
-  let shape = [];
-  let traced = new Array(N).fill(false);
+  const STAGES = [
+    { name:'日の丸',   shapeFn:(th,Rb)=>Rb,          fill:'188,0,45'   },
+    { name:'ハート',   shapeFn:heartRadius,            fill:'255,63,110' },
+    { name:'星',       shapeFn:starRadius,             fill:'255,196,42' }
+  ];
+  let currentStageIndex = 0;
+  let targetRCache = new Float32Array(N_BUCKETS);
+  let shapePts = [];
+  let shapePath = null;
+
+  function buildStageCache(){
+    const stage = STAGES[currentStageIndex];
+    shapePts = [];
+    shapePath = new Path2D();
+    for(let i = 0; i < N_BUCKETS; i++){
+      const a = (i / N_BUCKETS) * Math.PI * 2;
+      const r = stage.shapeFn(a, R);
+      targetRCache[i] = r;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      shapePts.push({x, y});
+      if(i === 0) shapePath.moveTo(x, y); else shapePath.lineTo(x, y);
+    }
+    shapePath.closePath();
+  }
+
+  function renderStageList(){
+    stageList.innerHTML = '';
+    STAGES.forEach((s, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'stageBtn';
+      btn.innerHTML = '<span class="num">' + (i+1) + '</span><span>' + s.name + '</span>';
+      btn.addEventListener('click', () => startGame(i));
+      stageList.appendChild(btn);
+    });
+  }
+
+  function resize(){
+    const size = Math.min(window.innerWidth, window.innerHeight) * 0.86;
+    canvas.width = size * devicePixelRatio;
+    canvas.height = size * devicePixelRatio;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    W = size; H = size;
+    cx = W/2; cy = H/2;
+    R = W * 0.30;
+    safeBand = W * 0.028;
+    needleOffset = W * 0.16;
+    buildStageCache();
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- state ----
+  let mode = 'title'; // title | playing | gameover | clear
+  let traced = new Array(N_BUCKETS).fill(false);
   let tracedCount = 0;
-
-  let needle = {tip:{x:115,y:500},handle:{x:115,y:596}};
-  let dragging = false;
-  let started = false;
-  let failed = false;
-  let cleared = false;
-  let pointerId = null;
-  let state = "ready";
+  let currentState = null; // 'green' | 'white' | 'red' | null
+  let needle = null; // {x,y} = visible tip position (offset above finger)
+  let handlePos = null; // {x,y} = actual finger/touch position
   let startTime = null;
   let elapsed = 0;
-  let raf = null;
-  let soundOn = true;
-  let audioCtx = null;
+  let failPoint = null;
+  let rafId = null;
 
-  function heartPoint(t){
-    const a=t*Math.PI*2;
-    const x=16*Math.sin(a)**3;
-    const y=13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a);
-    return {x:C.x+x*11.7,y:C.y-y*11.7+8};
+  function vibrate(pattern){
+    if(navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} }
   }
 
-  function starPoint(t){
-    const pts=[];
-    for(let i=0;i<10;i++){
-      const a=-Math.PI/2+i*Math.PI/5;
-      const r=i%2===0?202:88;
-      pts.push({x:C.x+Math.cos(a)*r,y:C.y+Math.sin(a)*r});
-    }
-    const seg=t*10, i=Math.floor(seg)%10, u=seg-Math.floor(seg);
-    const a=pts[i],b=pts[(i+1)%10];
-    return {x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u};
+  function resetGame(){
+    traced.fill(false);
+    tracedCount = 0;
+    currentState = null;
+    needle = null;
+    handlePos = null;
+    startTime = null;
+    elapsed = 0;
+    failPoint = null;
+    progressBar.style.width = '0%';
+    timerEl.textContent = '0.0s';
   }
 
-  const STAGES=[
-    {name:"日の丸",emoji:"🇯🇵",point:t=>({x:C.x+Math.cos(-Math.PI/2+t*Math.PI*2)*185,y:C.y+Math.sin(-Math.PI/2+t*Math.PI*2)*185})},
-    {name:"ハート",emoji:"❤️",point:heartPoint},
-    {name:"星",emoji:"⭐",point:starPoint}
-  ];
-
-  function buildShape(){
-    shape=[];
-    for(let i=0;i<N;i++) shape.push(STAGES[stageIndex].point(i/N));
+  function showScreen(el){
+    [titleScreen, gameoverScreen, clearScreen].forEach(s => s.classList.add('hidden'));
+    if(el) el.classList.remove('hidden');
   }
 
-  function nearest(p){
-    let best={i:-1,d:Infinity,p:null};
-    for(let i=0;i<N;i++){
-      const q=shape[i],d=Math.hypot(p.x-q.x,p.y-q.y);
-      if(d<best.d) best={i,d,p:q};
-    }
-    return best;
+  function startGame(stageIndex){
+    if(typeof stageIndex === 'number') currentStageIndex = stageIndex;
+    buildStageCache();
+    resetGame();
+    mode = 'playing';
+    needleName.textContent = STAGES[currentStageIndex].name;
+    showScreen(null);
+    hud.classList.remove('hidden');
+    legend.classList.remove('hidden');
+    loop();
   }
 
-  function pointInPolygon(p){
-    let inside=false;
-    for(let i=0,j=N-1;i<N;j=i++){
-      const a=shape[i],b=shape[j];
-      const hit=((a.y>p.y)!==(b.y>p.y)) &&
-        (p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y+1e-9)+a.x);
-      if(hit) inside=!inside;
-    }
-    return inside;
+  function goToStageSelect(){
+    mode = 'title';
+    hud.classList.add('hidden');
+    legend.classList.add('hidden');
+    showScreen(titleScreen);
   }
 
-  function reset(){
-    buildShape();
-    traced=new Array(N).fill(false);
-    tracedCount=0;
-    needle={tip:{x:115,y:500},handle:{x:115,y:596}};
-    dragging=false;started=false;failed=false;cleared=false;pointerId=null;
-    state="ready";startTime=null;elapsed=0;
-    nextBtn.disabled=true;
-    nextBtn.textContent=stageIndex===STAGES.length-1?"最初から":"次のステージ";
-    stageName.textContent=`${stageIndex+1} / ${STAGES.length}　${STAGES[stageIndex].name}`;
-    guide.classList.remove("hidden");
-    guide.innerHTML="<strong>針をつかんで黄色い点へ</strong><span>内側に入ると即アウト。外側は戻ればセーフ。</span>";
-    updateUI();
-    draw();
+  function gameOver(x, y){
+    mode = 'gameover';
+    failPoint = {x, y};
+    vibrate([0, 60, 30, 90]);
+    setTimeout(() => {
+      hud.classList.add('hidden');
+      legend.classList.add('hidden');
+      showScreen(gameoverScreen);
+    }, 480);
   }
 
-  function setNeedleFromHandle(h){
-    needle.handle={...h};
-    needle.tip={x:h.x,y:h.y-NEEDLE_LEN};
+  function clearGame(){
+    mode = 'clear';
+    vibrate([0, 30, 40, 30, 40, 60]);
+    hud.classList.add('hidden');
+    legend.classList.add('hidden');
+    clearTimeEl.textContent = elapsed.toFixed(2) + 's';
+    const isLast = currentStageIndex === STAGES.length - 1;
+    nextBtn.textContent = isLast ? 'さいしょのステージへ' : 'つぎのステージへ';
+    showScreen(clearScreen);
   }
 
-  function pointer(e){
-    const r=canvas.getBoundingClientRect();
-    return {x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height};
+  // ---- input ----
+  function pointerPos(e){
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
   }
 
-  function onShaft(p){
-    return distanceSegment(p,needle.tip,needle.handle)<=28;
-  }
-
-  function onDown(e){
-    if(cleared)return;
+  function handleMove(e){
+    if(mode !== 'playing') return;
     e.preventDefault();
-    const p=pointer(e);
-    if(Math.hypot(p.x-needle.handle.x,p.y-needle.handle.y)>GRAB_R*1.3 && !onShaft(p)){
-      guide.classList.remove("hidden");
-      guide.innerHTML="<strong>針をつかんでね</strong><span>左下の棒または丸い持ち手を押さえます。</span>";
-      return;
+    const p = pointerPos(e);
+    handlePos = p;
+
+    // Tip is offset above the finger so the fingertip never covers the
+    // point that actually gets judged. Near the top edge, shrink the
+    // offset so the tip stays on-canvas instead of clamping (which would
+    // make the tip "stick" under the finger).
+    const maxOffset = Math.max(0, p.y - W*0.06);
+    const offset = Math.min(needleOffset, maxOffset);
+    const tip = { x: p.x, y: p.y - offset };
+    needle = tip;
+
+    if(startTime === null) startTime = performance.now();
+
+    const dx = tip.x - cx, dy = tip.y - cy;
+    const dist = Math.hypot(dx, dy);
+    const angleDeg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+    const bucket = Math.round(angleDeg) % N_BUCKETS;
+    const diff = dist - targetRCache[bucket];
+
+    let newState;
+    if(Math.abs(diff) <= safeBand) newState = 'green';
+    else if(diff > safeBand) newState = 'white';
+    else newState = 'red';
+
+    if(newState !== currentState){
+      currentState = newState;
+      if(newState === 'green') vibrate([0, 18, 20, 12]);
+      else if(newState === 'white') vibrate(6);
+      else if(newState === 'red') vibrate(40);
     }
-    dragging=true;pointerId=e.pointerId;
-    canvas.setPointerCapture?.(e.pointerId);
-    guide.classList.add("hidden");
-  }
 
-  function onMove(e){
-    if(!dragging||failed||cleared||e.pointerId!==pointerId)return;
-    e.preventDefault();
-
-    setNeedleFromHandle(pointer(e));
-    const n=nearest(needle.tip);
-    const start=shape[0];
-
-    if(!started){
-      state="ready";
-      if(Math.hypot(needle.tip.x-start.x,needle.tip.y-start.y)<=18){
-        started=true;state="green";startTime=performance.now();
-        mark(n.i);tick(480,.05);vibrate([20,20,20]);
+    if(newState === 'green'){
+      const base = Math.round(angleDeg);
+      for(let i = -2; i <= 2; i++){
+        const b = (base + i + N_BUCKETS) % N_BUCKETS;
+        if(!traced[b]){ traced[b] = true; tracedCount++; }
       }
-      updateUI();draw();return;
-    }
-
-    const inside=pointInPolygon(needle.tip);
-    const safe=10;
-    const warning=18;
-
-    // 重要: 内側は即アウト、外側は警告のみ
-    if(inside && n.d>safe){
-      state="red";
-      fail();
-      return;
-    }
-
-    if(n.d<=safe){
-      state="green";
-      mark(n.i);
-      scratch();
-    }else if(!inside){
-      state="white";
-    }else if(n.d<=warning){
-      state="yellow";
-    }
-
-    updateUI();draw();
-
-    if(tracedCount>=N){
-      clear();
+      const pct = (tracedCount / N_BUCKETS) * 100;
+      progressBar.style.width = pct.toFixed(1) + '%';
+      if(tracedCount >= N_BUCKETS){
+        elapsed = (performance.now() - startTime) / 1000;
+        clearGame();
+      }
+    } else if(newState === 'red'){
+      gameOver(tip.x, tip.y);
     }
   }
 
-  function onUp(e){
-    if(e.pointerId!==pointerId)return;
-    dragging=false;pointerId=null;
-    if(started&&!failed&&!cleared){
-      guide.classList.remove("hidden");
-      guide.innerHTML="<strong>針はその場にあります</strong><span>もう一度つかんで続きから削れます。</span>";
-    }
+  function handleEnd(){
+    if(mode !== 'playing') return;
+    needle = null;
+    handlePos = null;
+    currentState = null;
   }
 
-  function mark(i){
-    for(let k=-3;k<=3;k++){
-      const idx=(i+k+N)%N;
-      if(!traced[idx]){traced[idx]=true;tracedCount++}
-    }
-  }
+  canvas.addEventListener('touchstart', handleMove, {passive:false});
+  canvas.addEventListener('touchmove', handleMove, {passive:false});
+  canvas.addEventListener('touchend', handleEnd, {passive:false});
+  canvas.addEventListener('mousedown', handleMove);
+  canvas.addEventListener('mousemove', (e)=>{ if(e.buttons===1) handleMove(e); });
+  canvas.addEventListener('mouseup', handleEnd);
 
-  function fail(){
-    failed=true;dragging=false;pointerId=null;
-    stateText.textContent="MISS";
-    guide.classList.remove("hidden");
-    guide.innerHTML="<strong>割れた…</strong><span>内側へ針先が入ると即アウトです。</span>";
-    vibrate([60,30,90]);tick(130,.2);
-    draw();
-  }
+  retryBtn.addEventListener('click', () => startGame(currentStageIndex));
+  nextBtn.addEventListener('click', () => {
+    const next = (currentStageIndex + 1) % STAGES.length;
+    startGame(next);
+  });
+  backBtnOver.addEventListener('click', goToStageSelect);
+  backBtnClear.addEventListener('click', goToStageSelect);
+  renderStageList();
 
-  function clear(){
-    cleared=true;dragging=false;pointerId=null;
-    elapsed=(performance.now()-startTime)/1000;
-    nextBtn.disabled=false;
-    vibrate([25,30,25,30,60]);
-    [523,659,784].forEach((f,i)=>tick(f,.16,i*.1));
-    resultIcon.textContent=STAGES[stageIndex].emoji;
-    resultTitle.textContent="抜けた！";
-    resultBody.textContent=`クリアタイム ${elapsed.toFixed(2)}秒`;
-    resultNext.textContent=stageIndex===STAGES.length-1?"最初から遊ぶ":"次のステージ";
-    setTimeout(()=>resultDialog.showModal(),220);
-  }
-
-  function updateUI(){
-    const pct=tracedCount/N*100;
-    progressBar.style.width=pct+"%";
-    progressText.textContent=Math.round(pct)+"%";
-    stateText.textContent=
-      state==="green"?"GREEN":
-      state==="white"?"OUTSIDE":
-      state==="yellow"?"CAUTION":
-      state==="red"?"MISS":"READY";
-  }
-
+  // ---- drawing ----
   function draw(){
     ctx.clearRect(0,0,W,H);
-    ctx.fillStyle="#e8c783";ctx.fillRect(0,0,W,H);
 
-    ctx.save();
-    ctx.globalAlpha=.07;ctx.strokeStyle="#76522f";ctx.lineWidth=2;
-    for(let i=-H;i<W+H;i+=22){
-      ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i-H,H);ctx.stroke();
-    }
-    ctx.restore();
-
-    ctx.save();
+    // candy base plate (washi paper look)
+    const plateR = R + safeBand + W*0.09;
+    const grad = ctx.createRadialGradient(cx, cy - plateR*0.2, plateR*0.1, cx, cy, plateR);
+    grad.addColorStop(0, '#fffaf0');
+    grad.addColorStop(1, '#e7d9ad');
     ctx.beginPath();
-    shape.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-    ctx.closePath();
-    ctx.fillStyle="rgba(255,248,226,.28)";
+    ctx.arc(cx, cy, plateR, 0, Math.PI*2);
+    ctx.fillStyle = grad;
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(120,90,40,0.25)';
+    ctx.stroke();
 
-    ctx.strokeStyle="rgba(76,47,22,.24)";ctx.lineWidth=25;ctx.stroke();
-    ctx.strokeStyle="#f5e6c2";ctx.lineWidth=12;ctx.stroke();
-    ctx.setLineDash([5,10]);ctx.strokeStyle="#6f5639";ctx.lineWidth=3;ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.lineWidth=7;ctx.strokeStyle="#2fa36b";
-    for(let i=0;i<N;i++){
-      if(!traced[i])continue;
-      const a=shape[i],b=shape[(i+1)%N];
-      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    // shape fill (candy "core" that deepens in color as more gets traced)
+    if(shapePath){
+      const fillRGB = STAGES[currentStageIndex].fill;
+      ctx.fillStyle = 'rgba(' + fillRGB + ',' + (0.10 + 0.55 * (tracedCount/N_BUCKETS)) + ')';
+      ctx.fill(shapePath);
     }
 
-    const s=shape[0];
-    ctx.fillStyle="#efb936";ctx.beginPath();ctx.arc(s.x,s.y,15,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle="#fff8e8";ctx.lineWidth=5;ctx.stroke();
-
-    ctx.fillStyle="rgba(45,36,29,.72)";
-    ctx.font="900 22px -apple-system,sans-serif";
-    ctx.textAlign="center";
-    ctx.fillText(STAGES[stageIndex].name,C.x,54);
-    ctx.restore();
-
-    drawNeedle();
-  }
-
-  function drawNeedle(){
-    let col="#8a939c";
-    if(state==="green")col="#2fa36b";
-    else if(state==="white"||state==="yellow")col="#efcf73";
-    else if(state==="red")col="#d94a3a";
-
-    ctx.save();
-    ctx.fillStyle=dragging?"rgba(255,255,255,.78)":"rgba(255,255,255,.46)";
-    ctx.beginPath();ctx.arc(needle.handle.x,needle.handle.y,GRAB_R,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle="rgba(64,54,45,.35)";ctx.lineWidth=3;ctx.stroke();
-
-    ctx.strokeStyle="#41484f";ctx.lineWidth=10;ctx.lineCap="round";
-    ctx.beginPath();ctx.moveTo(needle.handle.x,needle.handle.y-8);ctx.lineTo(needle.tip.x,needle.tip.y+8);ctx.stroke();
-    ctx.strokeStyle="#dce3e8";ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(needle.handle.x-2,needle.handle.y-12);ctx.lineTo(needle.tip.x-2,needle.tip.y+11);ctx.stroke();
-
-    ctx.fillStyle=col;ctx.beginPath();ctx.arc(needle.tip.x,needle.tip.y,9,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(needle.tip.x,needle.tip.y,3.5,0,Math.PI*2);ctx.fill();
-
-    if(!started&&!dragging){
-      ctx.fillStyle="rgba(45,36,29,.75)";
-      ctx.font="800 16px -apple-system,sans-serif";
-      ctx.textAlign="center";
-      ctx.fillText("ここをつかむ",needle.handle.x,needle.handle.y+55);
+    // guide line (target line) per bucket: traced -> green glow, else faint dashed
+    if(shapePts.length === N_BUCKETS){
+      for(let i = 0; i < N_BUCKETS; i++){
+        const p0 = shapePts[i];
+        const p1 = shapePts[(i+1) % N_BUCKETS];
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        if(traced[i]){
+          ctx.strokeStyle = 'rgba(63,224,138,0.9)';
+          ctx.lineWidth = 5;
+        } else {
+          ctx.strokeStyle = 'rgba(120,60,20,0.35)';
+          ctx.lineWidth = 2;
+        }
+        ctx.stroke();
+      }
     }
-    ctx.restore();
-  }
 
-  function distanceSegment(p,a,b){
-    const dx=b.x-a.x,dy=b.y-a.y;
-    const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
-    return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));
+    // needle: a bamboo-skewer stick from the finger (handle) up to the
+    // tip that actually gets judged, so the tip stays visible above the hand.
+    if(needle && handlePos){
+      let col = '#ffffff';
+      if(currentState === 'green') col = '#3fe08a';
+      else if(currentState === 'white') col = '#fff6d8';
+      else if(currentState === 'red') col = '#ff3b3b';
+
+      // stick shaft
+      ctx.beginPath();
+      ctx.moveTo(handlePos.x, handlePos.y);
+      ctx.lineTo(needle.x, needle.y);
+      ctx.lineWidth = W*0.012;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#d8b978';
+      ctx.stroke();
+
+      // grip circle at the finger position
+      ctx.beginPath();
+      ctx.arc(handlePos.x, handlePos.y, W*0.024, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(216,185,120,0.55)';
+      ctx.fill();
+
+      // glowing tip (this is the point being judged)
+      ctx.beginPath();
+      ctx.arc(needle.x, needle.y, W*0.015, 0, Math.PI*2);
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 16;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // crack effect
+    if(mode === 'gameover' && failPoint){
+      ctx.strokeStyle = 'rgba(255,59,59,0.85)';
+      ctx.lineWidth = 2;
+      for(let i=0;i<7;i++){
+        const ang = Math.random()*Math.PI*2;
+        const len = W*0.05 + Math.random()*W*0.12;
+        ctx.beginPath();
+        ctx.moveTo(failPoint.x, failPoint.y);
+        ctx.lineTo(failPoint.x + Math.cos(ang)*len, failPoint.y + Math.sin(ang)*len);
+        ctx.stroke();
+      }
+    }
   }
 
   function loop(){
-    if(started&&!failed&&!cleared){
-      elapsed=(performance.now()-startTime)/1000;
-      timerEl.textContent=elapsed.toFixed(1)+"s";
+    if(mode === 'playing'){
+      if(startTime !== null){
+        elapsed = (performance.now() - startTime) / 1000;
+        timerEl.textContent = elapsed.toFixed(1) + 's';
+      }
+      draw();
+      rafId = requestAnimationFrame(loop);
+    } else if(mode === 'gameover'){
+      draw();
+      rafId = requestAnimationFrame(loop);
     }
-    raf=requestAnimationFrame(loop);
   }
 
-  function vibrate(p){if(navigator.vibrate)navigator.vibrate(p)}
-  function ensureAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
-  function tick(freq,duration,delay=0){
-    if(!soundOn)return;
-    try{
-      ensureAudio();
-      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-      o.frequency.value=freq;o.type="triangle";
-      g.gain.setValueAtTime(.0001,audioCtx.currentTime+delay);
-      g.gain.exponentialRampToValueAtTime(.07,audioCtx.currentTime+delay+.008);
-      g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+delay+duration);
-      o.connect(g).connect(audioCtx.destination);
-      o.start(audioCtx.currentTime+delay);o.stop(audioCtx.currentTime+delay+duration+.02);
-    }catch(_){}
-  }
-  let lastScratch=0;
-  function scratch(){
-    const now=performance.now();
-    if(now-lastScratch<90)return;
-    lastScratch=now;tick(720+Math.random()*90,.018);vibrate(4);
-  }
-
-  canvas.addEventListener("pointerdown",onDown,{passive:false});
-  canvas.addEventListener("pointermove",onMove,{passive:false});
-  canvas.addEventListener("pointerup",onUp,{passive:false});
-  canvas.addEventListener("pointercancel",onUp,{passive:false});
-
-  resetBtn.addEventListener("click",reset);
-  nextBtn.addEventListener("click",()=>{
-    if(!cleared)return;
-    stageIndex=(stageIndex+1)%STAGES.length;reset();
-  });
-  resultNext.addEventListener("click",()=>{
-    resultDialog.close();
-    stageIndex=(stageIndex+1)%STAGES.length;reset();
-  });
-  soundBtn.addEventListener("click",()=>{
-    soundOn=!soundOn;soundBtn.textContent=soundOn?"🔊":"🔇";
-  });
-  resultDialog.addEventListener("cancel",e=>e.preventDefault());
-
-  reset();loop();
+  resize();
 })();

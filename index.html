@@ -1,70 +1,54 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#f3d58e">
-  <title>Project 縁日｜型抜き Ver.4</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KING OF KATANUKI（試作）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="hero">
-      <p class="eyebrow">PROJECT ENNICHI</p>
-      <h1>型抜き</h1>
-      <p class="tagline">あの気持ちを、もう一度。</p>
-    </header>
+<div id="stage">
+  <div class="glow glow1"></div>
+  <div class="glow glow2"></div>
 
-    <section class="panel">
-      <div class="top">
-        <div>
-          <span>STAGE</span>
-          <strong id="stageName">1 / 3　日の丸</strong>
-        </div>
-        <button id="soundBtn" class="round">🔊</button>
-      </div>
+  <div id="hud" class="hidden">
+    <div id="needleName"></div>
+    <div id="progressWrap"><div id="progressBar"></div></div>
+    <div id="timer">0.0s</div>
+  </div>
 
-      <div class="progress"><div id="progressBar"></div></div>
+  <canvas id="game"></canvas>
 
-      <div class="canvasWrap">
-        <canvas id="game" width="640" height="720"></canvas>
-        <div id="guide" class="guide">
-          <strong>針をつかんで黄色い点へ</strong>
-          <span>内側に入ると即アウト。外側は戻ればセーフ。</span>
-        </div>
-      </div>
+  <div class="legend hidden" id="legend">
+    <span><i class="dot" style="background:var(--safe)"></i>セーフ</span>
+    <span><i class="dot" style="background:var(--warn)"></i>外側</span>
+    <span><i class="dot" style="background:var(--danger)"></i>内側=即アウト</span>
+  </div>
 
-      <div class="stats">
-        <div><span>進行</span><strong id="progressText">0%</strong></div>
-        <div><span>タイム</span><strong id="timer">0.0s</strong></div>
-        <div><span>状態</span><strong id="stateText">READY</strong></div>
-      </div>
+  <div class="overlay" id="titleScreen">
+    <div class="stageLabel">STAGE SELECT</div>
+    <h1 class="title">KING<br>OF<br>KATANUKI<span class="sub">型 抜 き の 王</span></h1>
+    <div class="stageList" id="stageList"></div>
+  </div>
 
-      <div class="legend">
-        <span><i class="g"></i>線上</span>
-        <span><i class="w"></i>外側</span>
-        <span><i class="r"></i>内側＝即アウト</span>
-      </div>
+  <div class="overlay hidden" id="gameoverScreen">
+    <div class="stageLabel" style="color:var(--danger)">割れた…</div>
+    <h1 class="title" style="font-size:clamp(30px,9vw,48px)">GAME OVER</h1>
+    <button class="cta" id="retryBtn">もう一度</button>
+    <button class="linkBtn" id="backBtnOver">ステージ選択へ</button>
+  </div>
 
-      <div class="actions">
-        <button id="resetBtn" class="secondary">やり直す</button>
-        <button id="nextBtn" class="primary" disabled>次のステージ</button>
-      </div>
-    </section>
+  <div class="overlay hidden" id="clearScreen">
+    <div class="stageLabel" style="color:var(--safe)">CLEAR</div>
+    <h1 class="title" style="font-size:clamp(30px,9vw,48px)">抜けた！</h1>
+    <div class="resultTime">クリアタイム <b id="clearTime">0.00s</b></div>
+    <button class="cta" id="nextBtn">つぎのステージへ</button>
+    <button class="linkBtn" id="backBtnClear">ステージ選択へ</button>
+  </div>
+</div>
 
-    <footer>Prototype v4.0</footer>
-  </main>
-
-  <dialog id="resultDialog">
-    <div class="result">
-      <div id="resultIcon">✨</div>
-      <p id="resultKicker">CLEAR!</p>
-      <h2 id="resultTitle">抜けた！</h2>
-      <p id="resultBody"></p>
-      <button id="resultNext" class="primary">次へ</button>
-    </div>
-  </dialog>
-
-  <script src="script.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
