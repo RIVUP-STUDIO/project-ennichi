@@ -91,7 +91,7 @@
     W = size; H = size;
     cx = W/2; cy = H/2;
     R = W * 0.30;
-    safeBand = W * 0.028;
+    safeBand = W * 0.015;
     needleOffset = W * 0.16;
     buildStageCache();
     draw();
@@ -112,6 +112,38 @@
 
   function vibrate(pattern){
     if(navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} }
+  }
+
+  // ---- carving sound (synthesized "kari-kari" scratch, no audio files needed) ----
+  let audioCtx = null;
+  let noiseBuffer = null;
+  let lastScratchAt = 0;
+  function initAudio(){
+    if(audioCtx) return;
+    try{
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const len = audioCtx.sampleRate * 0.25;
+      noiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for(let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }catch(e){ audioCtx = null; }
+  }
+  function playScratch(){
+    if(!audioCtx || !noiseBuffer) return;
+    const now = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer;
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1700 + Math.random() * 1600;
+    bp.Q.value = 7;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.16, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    src.connect(bp); bp.connect(gain); gain.connect(audioCtx.destination);
+    src.start(now);
+    src.stop(now + 0.06);
   }
 
   function resetGame(){
@@ -183,6 +215,7 @@
   function handleMove(e){
     if(mode !== 'playing') return;
     e.preventDefault();
+    if(!audioCtx) initAudio();
     const p = pointerPos(e);
     handlePos = p;
 
@@ -192,26 +225,41 @@
     // make the tip "stick" under the finger).
     const maxOffset = Math.max(0, p.y - W*0.06);
     const offset = Math.min(needleOffset, maxOffset);
-    const tip = { x: p.x, y: p.y - offset };
-    needle = tip;
+    const rawTip = { x: p.x, y: p.y - offset };
 
     if(startTime === null) startTime = performance.now();
 
-    const dx = tip.x - cx, dy = tip.y - cy;
-    const dist = Math.hypot(dx, dy);
+    let dx = rawTip.x - cx, dy = rawTip.y - cy;
+    let dist = Math.hypot(dx, dy);
     const angleDeg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
     const bucket = Math.round(angleDeg) % N_BUCKETS;
-    const diff = dist - targetRCache[bucket];
+    const targetR = targetRCache[bucket];
+    const diffRaw = dist - targetR;
+
+    // Magnetic assist: within a capture range around the line, gently pull
+    // the tip toward it so small hand tremor doesn't throw off the trace.
+    const magnetRange = safeBand * 2.4;
+    let snappedDist = dist;
+    if(dist > 0.001 && Math.abs(diffRaw) < magnetRange){
+      const pull = 1 - Math.abs(diffRaw) / magnetRange; // 0..1, stronger near the line
+      snappedDist = dist - diffRaw * pull * 0.6;
+    }
+    const dirX = dist > 0.001 ? dx / dist : 1;
+    const dirY = dist > 0.001 ? dy / dist : 0;
+    const tip = { x: cx + dirX * snappedDist, y: cy + dirY * snappedDist };
+    needle = tip;
+
+    const diff = snappedDist - targetR;
 
     let newState;
     if(Math.abs(diff) <= safeBand) newState = 'green';
-    else if(diff > safeBand) newState = 'white';
+    else if(diff > safeBand) newState = 'yellow';
     else newState = 'red';
 
     if(newState !== currentState){
       currentState = newState;
       if(newState === 'green') vibrate([0, 18, 20, 12]);
-      else if(newState === 'white') vibrate(6);
+      else if(newState === 'yellow') vibrate(6);
       else if(newState === 'red') vibrate(40);
     }
 
@@ -223,6 +271,15 @@
       }
       const pct = (tracedCount / N_BUCKETS) * 100;
       progressBar.style.width = pct.toFixed(1) + '%';
+
+      // continuous "kari-kari" scratch sound + light vibration while carving
+      const now = performance.now();
+      if(now - lastScratchAt > 90){
+        lastScratchAt = now;
+        playScratch();
+        vibrate(5);
+      }
+
       if(tracedCount >= N_BUCKETS){
         elapsed = (performance.now() - startTime) / 1000;
         clearGame();
@@ -303,7 +360,7 @@
     if(needle && handlePos){
       let col = '#ffffff';
       if(currentState === 'green') col = '#3fe08a';
-      else if(currentState === 'white') col = '#fff6d8';
+      else if(currentState === 'yellow') col = '#ffd23f';
       else if(currentState === 'red') col = '#ff3b3b';
 
       // stick shaft
