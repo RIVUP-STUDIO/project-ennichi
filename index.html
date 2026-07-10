@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#f7e7bd" />
+  <title>Project 縁日｜型抜きゲーム</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">PROJECT ENNICHI</p>
+      <h1>型抜き</h1>
+      <p class="tagline">あの気持ちを、もう一度。</p>
+    </header>
+
+    <section class="game-card">
+      <div class="topbar">
+        <div>
+          <span class="label">STAGE</span>
+          <strong id="stageLabel">1 / 3　日の丸</strong>
+        </div>
+        <button id="soundButton" class="icon-button" type="button" aria-label="効果音の切り替え">🔊</button>
+      </div>
+
+      <div class="meter-wrap" aria-label="進捗">
+        <div id="meter" class="meter"></div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="gameCanvas" width="640" height="640" aria-label="型抜きゲーム画面"></canvas>
+        <div id="message" class="message">
+          <strong>線の上を一筆でなぞろう</strong>
+          <span>指を離さず、スタート地点まで戻ってね</span>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div><span>精度</span><strong id="accuracy">0%</strong></div>
+        <div><span>進行</span><strong id="progress">0%</strong></div>
+        <div><span>判定</span><strong id="rank">---</strong></div>
+      </div>
+
+      <div class="actions">
+        <button id="resetButton" class="secondary" type="button">やり直す</button>
+        <button id="nextButton" class="primary" type="button" disabled>次のステージ</button>
+      </div>
+
+      <p class="hint">黄色い点からスタート。線から外れすぎると失敗です。</p>
+    </section>
+
+    <footer>Prototype v1.0</footer>
+  </main>
+
+  <dialog id="resultDialog">
+    <div class="result">
+      <div id="resultIcon" class="result-icon">✨</div>
+      <p id="resultKicker" class="result-kicker">CLEAR!</p>
+      <h2 id="resultTitle">お見事！</h2>
+      <p id="resultText">型をきれいに抜けました。</p>
+      <button id="resultButton" class="primary" type="button">次へ</button>
+    </div>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>
