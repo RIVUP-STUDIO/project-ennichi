@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#f7e7bd" />
-  <title>Project 縁日｜型抜きゲーム</title>
+  <title>Project 縁日｜型抜きゲーム Ver.2</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -29,17 +29,24 @@
       </div>
 
       <div class="canvas-wrap">
-        <canvas id="gameCanvas" width="640" height="640" aria-label="型抜きゲーム画面"></canvas>
+        <canvas id="gameCanvas" width="640" height="720" aria-label="型抜きゲーム画面"></canvas>
+
         <div id="message" class="message">
-          <strong>線の上を一筆でなぞろう</strong>
-          <span>指を離さず、スタート地点まで戻ってね</span>
+          <strong>黄色い点に針先を合わせよう</strong>
+          <span>指は針より下。緑のまま点線を削ってね</span>
         </div>
       </div>
 
       <div class="stats">
         <div><span>精度</span><strong id="accuracy">0%</strong></div>
         <div><span>進行</span><strong id="progress">0%</strong></div>
-        <div><span>判定</span><strong id="rank">---</strong></div>
+        <div><span>状態</span><strong id="rank">---</strong></div>
+      </div>
+
+      <div class="legend">
+        <span><i class="dot green"></i>溝に当たっている</span>
+        <span><i class="dot yellow"></i>少しズレている</span>
+        <span><i class="dot red"></i>危険</span>
       </div>
 
       <div class="actions">
@@ -47,10 +54,10 @@
         <button id="nextButton" class="primary" type="button" disabled>次のステージ</button>
       </div>
 
-      <p class="hint">黄色い点からスタート。線から外れすぎると失敗です。</p>
+      <p class="hint">針先は指の約1cm上に表示されます。判定は針先のみです。</p>
     </section>
 
-    <footer>Prototype v1.0</footer>
+    <footer>Prototype v2.0</footer>
   </main>
 
   <dialog id="resultDialog">

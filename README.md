@@ -1,33 +1,26 @@
-# Project 縁日 型抜きゲーム Prototype
+# Project 縁日 型抜きゲーム Prototype Ver.2
 
-iPhoneのブラウザで遊べる、縁日の型抜きをイメージした一筆書きゲームです。
+Ver.2では操作感を大きく変更しました。
 
-## ステージ
+## 主な変更
 
-1. 日の丸
-2. ハート
-3. 星
+- 指ではなく「針先」で判定
+- 針先を指の約1cm上に表示
+- 点線に近いと軽く吸着する補正
+- 点線上は緑
+- 少し外れると黄色
+- 危険域は赤
+- 判定幅を大幅に縮小
+- 通過した点線が緑に変化
+- カリカリ音と微振動
+- フリーハンド感を抑制
 
-## クリア条件
+## GitHubへの反映
 
-- 黄色い点からスタート
-- 指を離さず一筆でなぞる
-- 線の上を一定以上カバーする
-- 最後にスタート地点へ戻る
-- 高精度なら `EXCELLENT CLEAR`
-
-## GitHub Pagesで公開する方法
-
-1. このフォルダ内の `index.html`、`style.css`、`script.js` をリポジトリへアップロード
-2. GitHubのリポジトリで `Settings`
-3. `Pages`
-4. `Build and deployment` の `Source` を `Deploy from a branch`
-5. Branchを `main`、フォルダを `/ (root)` にして `Save`
-6. 数分後に表示されるURLを開く
-
-## ファイル構成
+既存のリポジトリで次の3ファイルを上書きしてください。
 
 - `index.html`
 - `style.css`
 - `script.js`
-- `README.md`
+
+`README.md` は任意です。
